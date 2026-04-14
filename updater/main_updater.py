@@ -98,9 +98,15 @@ def apply_update() -> bool:
 
 
 def launch_app():
-    """Lanza la aplicación principal como subproceso y espera."""
-    python = sys.executable
-    log.info(f"Lanzando aplicación principal: {MAIN_APP}")
+    """Lanza la aplicación principal."""
+    # Como los .py se actualizan desde GitHub, debemos ejecutar Python del venv local.
+    python = os.path.join(BASE_DIR, "venv", "Scripts", "python.exe")
+    
+    # Fallback por si lo ejecutan en la misma pc de desarollo (sin compilar)
+    if not os.path.exists(python):
+        python = sys.executable
+        
+    log.info(f"Lanzando aplicación principal: {MAIN_APP} con {python}")
     try:
         proc = subprocess.Popen(
             [python, MAIN_APP],
@@ -108,8 +114,8 @@ def launch_app():
         )
         proc.wait()
         log.info(f"Aplicación finalizada con código {proc.returncode}.")
-    except FileNotFoundError:
-        log.critical(f"No se encontró {MAIN_APP}. Verifica la instalación.")
+    except Exception as e:
+        log.critical(f"No se pudo iniciar la aplicación principal: {e}")
         sys.exit(1)
 
 

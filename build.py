@@ -28,6 +28,7 @@ def build_updater():
         "--clean",
         "--onefile",
         "--name", "Lanzador",
+        "--icon", "app/assets/icon.ico",
         "--add-data", f"app/assets/style.qss{os.pathsep}app/assets",
         "updater/main_updater.py",
     ])
@@ -42,7 +43,9 @@ def build_app():
         "--onefile",
         "--noconsole",
         "--name", "App_Interna",
+        "--icon", "app/assets/icon.ico",
         "--add-data", f"app/assets/style.qss{os.pathsep}app/assets",
+        "--add-data", f"app/assets/icon.ico{os.pathsep}app/assets",
         # Incluir DLLs .NET necesarias
         "--add-binary", f"LibreHardwareMonitorLib.dll{os.pathsep}.",
         "--collect-all", "pythonnet",
@@ -51,13 +54,13 @@ def build_app():
 
 
 if __name__ == "__main__":
-    print("╔══════════════════════════════════════╗")
-    print("║  LHM Telemetry Agent — Build Script  ║")
-    print("╚══════════════════════════════════════╝")
+    print("======================================")
+    print("  LHM Telemetry Agent - Build Script  ")
+    print("======================================")
 
     build_updater()
     build_app()
 
-    print("\n✓ Compilación completa. Ejecutables en ./dist/")
-    print("  • dist/Lanzador.exe      → punto de entrada (auto-update)")
-    print("  • dist/App_Interna.exe   → aplicación principal")
+    print("\n[OK] Compilacion completa. Ejecutables en ./dist/")
+    print("  * dist/Lanzador.exe      -> punto de entrada (auto-update)")
+    print("  * dist/App_Interna.exe   -> aplicacion principal")

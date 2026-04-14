@@ -20,3 +20,12 @@ env/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Build and Distribution
+dist/
+build/
+*.exe
+*.spec
+
+# Logs
+*.log
