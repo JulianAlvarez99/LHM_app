@@ -23,7 +23,6 @@ Source: "install.bat"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\LHM Telemetry Agent"; Filename: "{app}\Updater.exe"
 Name: "{group}\Desinstalar LHM Telemetry Agent"; Filename: "{uninstallexe}"
-Name: "{commonstartup}\LHM Telemetry Agent"; Filename: "{app}\Updater.exe"
 [Code]
 var
   ClientPage: TInputQueryWizardPage;

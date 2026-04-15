@@ -48,10 +48,19 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
+echo [5/5] Registrando Servicio de Auto-Arranque con permisos de Administrador...
+powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0service_setup.ps1"
+if %errorlevel% neq 0 (
+    echo [ERROR] No se pudo crear la tarea programada. Intenta ejecutar manualmente como Administrador.
+    pause
+    exit /b
+)
+
 echo.
 echo ====================================================
 echo   [OK] INSTALACION COMPLETADA EXITOSAMENTE
 echo ====================================================
 echo La aplicacion ha sido instalada y configurada correctamente.
-echo El agente iniciara la captura de forma automatica al ser encendido.
+echo El agente iniciara la captura de forma automatica al ser encendido mediante una tarea programada segura.
 pause
+
