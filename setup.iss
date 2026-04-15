@@ -70,8 +70,14 @@ Filename: "git"; Parameters: "branch --set-upstream-to=origin/main main"; Workin
 Filename: "git"; Parameters: "reset --hard origin/main"; WorkingDir: "{app}"; Flags: runhidden; StatusMsg: "Sincronizando versiones..."
 ; Ejecutar script de PowerShell para sobreescribir el .env de forma segura
 Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\overide_client_name.ps1"" -EnvPath ""{app}\.env"" -ClientName ""{code:GetClientName}"""; WorkingDir: "{app}"; Flags: runhidden runascurrentuser waituntilterminated; StatusMsg: "Configurando nombre de cliente en destino..."
-; Ejecutar install.bat como administrador
-Filename: "{app}\install.bat"; Parameters: ""; WorkingDir: "{app}"; Flags: runascurrentuser waituntilterminated; StatusMsg: "Instalando entorno y configurando base de datos..."
+; --- INTEGRACIÓN DEL INSTALL.BAT DENTRO DEL INSTALADOR (MODO SILENCIOSO Y VISUAL) ---
+Filename: "python"; Parameters: "-m venv venv"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Creando entorno virtual (1/5)..."
+Filename: "{app}\venv\Scripts\python.exe"; Parameters: "-m pip install --upgrade pip"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Actualizando administrador de paquetes (2/5)..."
+Filename: "{app}\venv\Scripts\pip.exe"; Parameters: "install -r requirements.txt"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Instalando dependencias necesarias (3/5)..."
+Filename: "{app}\venv\Scripts\python.exe"; Parameters: "init_master_tables.py"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Inicializando tablas maestras de la base de datos (4/5)..."
+Filename: "{app}\venv\Scripts\python.exe"; Parameters: "db_setup.py"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Configurando hipertablas y politicas del cliente (5/5)..."
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -File ""{app}\service_setup.ps1"""; WorkingDir: "{app}"; Flags: runhidden runascurrentuser waituntilterminated; StatusMsg: "Registrando el servicio de auto-arranque..."
+
 ; Lanzar la aplicación al finalizar
 Filename: "{app}\Updater.exe"; Description: "Lanzar LHM Telemetry Agent"; Flags: nowait postinstall runascurrentuser
 
