@@ -52,12 +52,24 @@ def _load_stylesheet(app: QApplication):
 
 
 def main():
-    # Habilitar DPI alto en Windows
+    # Separación nativa en Taskbar y DPI para Windows
+    if os.name == 'nt':
+        try:
+            import ctypes
+            myappid = 'camet.lhm.telemetry.1.0'
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except Exception:
+            pass
+
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
 
     app = QApplication(sys.argv)
+    from PySide6.QtGui import QIcon
+    icon_path = os.path.join(APP_DIR, "assets", "icon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
     app.setApplicationName("LHM Telemetry Agent")
     app.setApplicationVersion("1.0.0")
     app.setOrganizationName("Camet")
@@ -68,9 +80,13 @@ def main():
     _load_stylesheet(app)
 
     window = MainWindow()
-    window.show()
+    # Ticket 2: Arrancar en el System Tray
+    # window.show()
 
-    log.info("Aplicación iniciada.")
+    # Ticket 3: Iniciar captura automaticamente
+    window._on_start()
+
+    log.info("Aplicación iniciada en System Tray.")
     ret = app.exec()
     log.info(f"Aplicación cerrada con código {ret}.")
     sys.exit(ret)

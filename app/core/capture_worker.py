@@ -69,7 +69,9 @@ class CaptureWorker(QThread):
                 f"Captura iniciada. Intervalo: {inst.update_time}s | "
                 f"Tabla: {inst.table_name}"
             )
-
+            
+            fallos_consecutivos = 0
+            
             while not self._stop_requested:
                 try:
                     now = datetime.now()
@@ -98,23 +100,38 @@ class CaptureWorker(QThread):
                         msg = f"✓ {len(to_db)} registros insertados"
                         self.log_message.emit(msg)
 
+                    fallos_consecutivos = 0
+
                     # Esperar en intervalos pequeños para responder a stop_requested
                     for _ in range(inst.update_time * 2):
                         if self._stop_requested:
                             break
                         time.sleep(0.5)
 
-                except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-                    self.db_connected.emit(False)
-                    self.log_message.emit(f"⚠ Conexión DB perdida: {e}. Reconectando...")
-                    inst._reconnect_db()
-                    self.db_connected.emit(True)
-                    self.log_message.emit("✓ Reconexión exitosa.")
-
                 except Exception as e:
-                    self.log_message.emit(f"✗ Error en ciclo: {e}")
-                    log.error(f"Error ciclo captura: {e}", exc_info=True)
-                    time.sleep(5)
+                    fallos_consecutivos += 1
+                    is_connection_error = isinstance(e, (psycopg2.OperationalError, psycopg2.InterfaceError))
+                    
+                    if is_connection_error:
+                        self.db_connected.emit(False)
+                        self.log_message.emit(f"⚠ Error crítico de conexión: {e}. Reconectando...")
+                        inst._reconnect_db()
+                        self.db_connected.emit(True)
+                        self.log_message.emit("✓ Reconexión exitosa.")
+                        fallos_consecutivos = 0
+                    else:
+                        self.log_message.emit(f"✗ Error en ciclo (Fallo {fallos_consecutivos}/3): {e}")
+                        log.error(f"Error ciclo captura (Fallo {fallos_consecutivos}/3): {e}", exc_info=True)
+                        if fallos_consecutivos >= 3:
+                            self.log_message.emit("Reconectando DB forzadamente tras fallos sucesivos...")
+                            inst._reconnect_db()
+                            self.db_connected.emit(True)
+                            fallos_consecutivos = 0
+                        else:
+                            for _ in range(10):  # Esperar 5s (intento)
+                                if self._stop_requested:
+                                    break
+                                time.sleep(0.5)
 
         except Exception as e:
             self.status_changed.emit("error")

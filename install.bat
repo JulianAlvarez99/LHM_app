@@ -48,14 +48,10 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-echo [5/5] Registrando el tarea de Windows via PowerShell...
-powershell -ExecutionPolicy Bypass -File .\service_setup.ps1
-
 echo.
 echo ====================================================
 echo   [OK] INSTALACION COMPLETADA EXITOSAMENTE
 echo ====================================================
-echo La tarea programada "LHM_Capture_Task" 
-echo ha sido registrada y esta lista para ser iniciada.
-echo Recuerda iniciarlo desde "Task Scheduler" como ADMINISTRADOR.
+echo La aplicacion ha sido instalada y configurada correctamente.
+echo El agente iniciara la captura de forma automatica al ser encendido.
 pause

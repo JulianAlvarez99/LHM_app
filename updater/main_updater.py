@@ -73,9 +73,9 @@ def check_for_updates() -> bool:
         log.warning(f"No se pudo hacer fetch: {err}")
         return False
 
-    # Comparar HEAD local con origin/HEAD
+    # Comparar HEAD local con origin/main
     code, local,  _ = _git("rev-parse", "HEAD")
-    code, remote, _ = _git("rev-parse", "@{u}")   # upstream
+    code, remote, _ = _git("rev-parse", "origin/main")
 
     if local != remote:
         log.info(f"Actualización disponible: {local[:7]} → {remote[:7]}")
@@ -86,39 +86,41 @@ def check_for_updates() -> bool:
 
 
 def apply_update() -> bool:
-    """Realiza git pull. Retorna True si fue exitoso."""
-    log.info("Aplicando actualización (git pull)...")
-    code, out, err = _git("pull", "--rebase", "origin")
+    """Realiza git reset --hard. Retorna True si fue exitoso."""
+    log.info("Aplicando actualización (git reset --hard origin/main)...")
+    code, out, err = _git("reset", "--hard", "origin/main")
     if code == 0:
-        log.info(f"Pull exitoso:\n{out}")
+        log.info(f"Actualización exitosa:\n{out}")
         return True
 
-    log.error(f"Error durante git pull (código {code}):\n{err}")
-    # Intento de recuperación: abortar rebase si quedó pendiente
-    _git("rebase", "--abort")
+    log.error(f"Error durante actualización (código {code}):\n{err}")
     return False
 
 
 def launch_app():
     """Lanza la aplicación principal."""
-    # Como los .py se actualizan desde GitHub, debemos ejecutar Python del venv local.
-    python = os.path.join(BASE_DIR, "venv", "Scripts", "python.exe")
+    app_exe = os.path.join(BASE_DIR, "LHM_Capture.exe")
+    python = os.path.join(BASE_DIR, "venv", "Scripts", "pythonw.exe")
     
-    # Fallback por si lo ejecutan en la misma pc de desarollo (sin compilar)
-    if not os.path.exists(python):
-        python = sys.executable
-        
-    log.info(f"Lanzando aplicación principal: {MAIN_APP} con {python}")
-    try:
-        proc = subprocess.Popen(
-            [python, MAIN_APP],
-            cwd=BASE_DIR,
-        )
-        proc.wait()
-        log.info(f"Aplicación finalizada con código {proc.returncode}.")
-    except Exception as e:
-        log.critical(f"No se pudo iniciar la aplicación principal: {e}")
-        sys.exit(1)
+    if os.path.exists(app_exe):
+        log.info(f"Lanzando aplicación principal compilada: {app_exe}")
+        try:
+            subprocess.Popen([app_exe], cwd=BASE_DIR)
+            sys.exit(0)
+        except Exception as e:
+            log.critical(f"No se pudo iniciar {app_exe}: {e}")
+            sys.exit(1)
+    else:
+        if not os.path.exists(python):
+            python = sys.executable
+            
+        log.info(f"Lanzando aplicación principal python: {MAIN_APP} con {python}")
+        try:
+            subprocess.Popen([python, MAIN_APP], cwd=BASE_DIR)
+            sys.exit(0)
+        except Exception as e:
+            log.critical(f"No se pudo iniciar {MAIN_APP}: {e}")
+            sys.exit(1)
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────────

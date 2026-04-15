@@ -1,7 +1,7 @@
 """
 Script de empaquetado — genera los dos ejecutables con PyInstaller:
-  • Lanzador.exe  → updater/main_updater.py  (consola visible para feedback)
-  • App_Interna.exe → app/main_app.py        (noconsole, vive en System Tray)
+  • Updater.exe  → updater/main_updater.py  (consola visible para feedback)
+  • LHM_Capture.exe → app/main_app.py        (noconsole, vive en System Tray)
 """
 
 import subprocess
@@ -22,12 +22,12 @@ def run(cmd: list[str]):
 
 
 def build_updater():
-    """Compila el Bootstrapper como Lanzador.exe."""
+    """Compila el Bootstrapper como Updater.exe."""
     run([
         sys.executable, "-m", "PyInstaller",
         "--clean",
         "--onefile",
-        "--name", "Lanzador",
+        "--name", "Updater",
         "--icon", "app/assets/icon.ico",
         "--add-data", f"app/assets/style.qss{os.pathsep}app/assets",
         "updater/main_updater.py",
@@ -35,14 +35,14 @@ def build_updater():
 
 
 def build_app():
-    """Compila la aplicación principal como App_Interna.exe (sin consola)."""
+    """Compila la aplicación principal como LHM_Capture.exe (sin consola)."""
     # Incluir DLLs de LibreHardwareMonitor y la hoja de estilos
     run([
         sys.executable, "-m", "PyInstaller",
         "--clean",
         "--onefile",
         "--noconsole",
-        "--name", "App_Interna",
+        "--name", "LHM_Capture",
         "--icon", "app/assets/icon.ico",
         "--add-data", f"app/assets/style.qss{os.pathsep}app/assets",
         "--add-data", f"app/assets/icon.ico{os.pathsep}app/assets",
@@ -62,5 +62,5 @@ if __name__ == "__main__":
     build_app()
 
     print("\n[OK] Compilacion completa. Ejecutables en ./dist/")
-    print("  * dist/Lanzador.exe      -> punto de entrada (auto-update)")
-    print("  * dist/App_Interna.exe   -> aplicacion principal")
+    print("  * dist/Updater.exe      -> punto de entrada (auto-update)")
+    print("  * dist/LHM_Capture.exe   -> aplicacion principal")
