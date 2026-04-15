@@ -11,9 +11,11 @@ import time
 import logging
 
 # ─── Rutas ─────────────────────────────────────────────────────────────────────
-# Cuando se compila con PyInstaller, __file__ apunta al .exe. El repositorio
-# siempre será el directorio PADRE de /updater/.
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Cuando se compila con PyInstaller, sys.executable apunta al exe real.
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 LOG_FILE = os.path.join(BASE_DIR, "updater.log")
 MAIN_APP  = os.path.join(BASE_DIR, "app", "main_app.py")

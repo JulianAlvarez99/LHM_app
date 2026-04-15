@@ -27,7 +27,7 @@ Name: "{commonstartup}\LHM Telemetry Agent"; Filename: "{app}\Lanzador.exe"
 [Run]
 ; Inicializar repositorio local y sincronizar 
 Filename: "git"; Parameters: "init"; WorkingDir: "{app}"; Flags: runhidden; StatusMsg: "Iniciando repositorio local..."
-Filename: "git"; Parameters: "remote add origin https://github.com/TU_USUARIO/LHM_app.git"; WorkingDir: "{app}"; Flags: runhidden; StatusMsg: "Configuracion de origen..."
+Filename: "git"; Parameters: "remote add origin https://github.com/Camet-Robotica/LHM_app.git"; WorkingDir: "{app}"; Flags: runhidden; StatusMsg: "Configuracion de origen..."
 Filename: "git"; Parameters: "fetch origin"; WorkingDir: "{app}"; Flags: runhidden; StatusMsg: "Descargando actualizaciones..."
 Filename: "git"; Parameters: "branch --set-upstream-to=origin/main main"; WorkingDir: "{app}"; Flags: runhidden; StatusMsg: "Integrando repositorio..."
 Filename: "git"; Parameters: "reset --hard origin/main"; WorkingDir: "{app}"; Flags: runhidden; StatusMsg: "Sincronizando versiones..."

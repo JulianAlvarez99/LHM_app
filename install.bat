@@ -19,7 +19,7 @@ if not exist ".env" (
 )
 
 echo [1/5] Creando Entorno Virtual (venv)...
-if not exist "venv\" (
+if not exist "venv\Scripts\python.exe" (
     python -m venv venv
 )
 if %errorlevel% neq 0 (
