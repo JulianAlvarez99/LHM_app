@@ -16,7 +16,7 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 $Action = New-ScheduledTaskAction -Execute $RunExe -WorkingDirectory $WorkingDir
 
 # 3. Disparador: Al iniciar sesión
-$Trigger = New-ScheduledTaskTrigger -AtLogOn
+$Trigger = New-ScheduledTaskTrigger -AtStartup
 
 # 4. Configuración principal: Ejecutar con Privilege Más Alto y de forma Interactiva
 # "S-1-5-32-544" es el identificador (SID) universal de Administradores en cualquier idioma
