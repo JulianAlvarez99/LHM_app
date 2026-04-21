@@ -7,8 +7,28 @@ Script de empaquetado — genera los dos ejecutables con PyInstaller:
 import subprocess
 import sys
 import os
+import shutil
+import stat
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _force_remove(func, path, _exc):
+    """Manejador de errores para shutil.rmtree: quita readonly y reintenta."""
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass  # si aun falla, se ignora silenciosamente
+
+
+def pre_clean():
+    """Elimina la carpeta build/ antes de compilar para evitar PermissionError en OneDrive."""
+    build_dir = os.path.join(BASE_DIR, "build")
+    if os.path.isdir(build_dir):
+        print(f"[PRE-CLEAN] Eliminando {build_dir} ...")
+        shutil.rmtree(build_dir, onexc=_force_remove)
+        print("[PRE-CLEAN] OK")
 
 
 def run(cmd: list[str]):
@@ -60,6 +80,7 @@ if __name__ == "__main__":
     print("  LHM Telemetry Agent - Build Script  ")
     print("======================================")
 
+    pre_clean()
     build_updater()
     build_app()
 

@@ -1,12 +1,13 @@
 """
 CaptureWorker — QThread que encapsula la lógica de TelemetryLogger.
-Hereda directamente de capture.py (sin duplicar código).
+Delega completamente en capture.py: no duplica el bucle de captura.
+El esquema productor-consumidor y la resolución de IDs están en capture.py.
 """
 
 import sys
 import os
-import time
 import logging
+from logging.handlers import RotatingFileHandler
 
 from PySide6.QtCore import QThread, Signal
 
@@ -15,6 +16,25 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+# ─── Conectar al mismo logger y archivo de log que capture.py ─────────────────
+# capture.py registra el RotatingFileHandler al importarse, pero nos aseguramos
+# de que exista incluso si capture.py aún no fue importado.
+_log_file = os.path.join(BASE_DIR, 'telemetry_capture.log')
+_log_formatter = logging.Formatter(
+    '[%(asctime)s] - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+_hw_logger = logging.getLogger('HardwareTelemetry')
+if not any(isinstance(h, RotatingFileHandler) for h in _hw_logger.handlers):
+    _file_handler = RotatingFileHandler(
+        _log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8'
+    )
+    _file_handler.setFormatter(_log_formatter)
+    _hw_logger.addHandler(_file_handler)
+    _hw_logger.setLevel(logging.INFO)
+
+# Logger propio del worker (hereda handlers del root configurado por main_app.py)
 log = logging.getLogger("CaptureWorker")
 
 
@@ -22,6 +42,12 @@ class CaptureWorker(QThread):
     """
     Worker que corre TelemetryLogger.run() en un hilo secundario.
     Emite señales para comunicarse con la GUI sin bloquearla.
+
+    Arquitectura interna de capture.py (delegada aquí por completo):
+    - __init__:  carga cache BD + construye sensor_plan (resolución única de IDs)
+    - run():     lanza hilo SensorProducer (_producer_loop) y ejecuta el
+                 consumidor (_consumer_loop) en el hilo llamante.
+    - stop():    setea _stop_event para apagado limpio de ambos hilos.
     """
 
     # Señales para la GUI
@@ -31,136 +57,78 @@ class CaptureWorker(QThread):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._running = False
         self._logger_instance = None
-        self._stop_requested = False
 
-    # ─── Ciclo principal del hilo ─────────────────────────────────────────────
+    # ─── Ciclo principal del QThread ──────────────────────────────────────────
 
     def run(self):
-        """Ejecuta el bucle de captura en segundo plano."""
-        self._stop_requested = False
+        """
+        Inicializa TelemetryLogger y delega en su run().
+        TelemetryLogger.run() lanza internamente el hilo SensorProducer y
+        bloquea en el _consumer_loop hasta que _stop_event sea seteado.
+        """
         self.status_changed.emit("running")
         self.log_message.emit("Inicializando captura de telemetría...")
+        _hw_logger.info("CaptureWorker: iniciando inicialización de TelemetryLogger.")
 
         try:
-            # Importar aquí para que el chdir de capture.py ocurra en este contexto
+            # Importar aquí para que el os.chdir() de capture.py ocurra en
+            # este contexto de hilo, no en el principal.
             from capture import TelemetryLogger
 
+            # __init__ realiza: conexión DB + init LHM + carga cache + build sensor_plan
             self._logger_instance = TelemetryLogger()
+
             self.db_connected.emit(True)
-            self.log_message.emit("Conexión a base de datos establecida.")
-            self.status_changed.emit("running")
-
-            # Bucle de captura adaptado para poder detenerlo desde la GUI
-            import clr  # noqa: F401  ya cargado por TelemetryLogger.__init__
-            import psycopg2
-            from psycopg2 import extras
-            from datetime import datetime
-
-            inst = self._logger_instance
-            LHM_TO_DB_HW = {
-                "Cpu": "CPU", "GpuNvidia": "GPU", "GpuAti": "GPU",
-                "Motherboard": "MOTHERBOARD", "SuperIO": "MOTHERBOARD",
-                "Memory": "MEMORIA RAM", "Storage": "ALMACENAMIENTO",
-            }
-
             self.log_message.emit(
-                f"Captura iniciada. Intervalo: {inst.update_time}s | "
-                f"Tabla: {inst.table_name}"
+                f"Conexión a base de datos establecida. "
+                f"Plan: {len(self._logger_instance.sensor_plan)} sensores activos. "
+                f"Intervalo: {self._logger_instance.update_time}s | "
+                f"Tabla: {self._logger_instance.table_name}"
             )
-            
-            fallos_consecutivos = 0
-            
-            while not self._stop_requested:
-                try:
-                    now = datetime.now()
-                    raw_sensors = inst._get_sensors_recursive(inst.pc.Hardware)
-                    to_db = []
-
-                    for lhm_hw_type, _, s_name, s_type, s_val in raw_sensors:
-                        if s_name == "Memory" and "Virtual Memory" in _:
-                            s_name = "Virtual Memory"
-                        db_hw_type = LHM_TO_DB_HW.get(lhm_hw_type, "").upper()
-                        h_id = inst.cache_hw.get(db_hw_type)
-                        s_id = inst._resolve_sensor_id(s_name, s_type)
-                        if h_id is not None and s_id is not None:
-                            val = float(s_val) if s_val is not None else 0.0
-                            to_db.append((now, h_id, s_id, _, val))
-
-                    if to_db:
-                        with inst.conn.cursor() as cur:
-                            query = (
-                                f"INSERT INTO {inst.table_name} "
-                                "(timestamp, hardware_id, sensor_id, hardware_name, value) VALUES %s"
-                            )
-                            extras.execute_values(cur, query, to_db)
-                            inst.conn.commit()
-
-                        msg = f"✓ {len(to_db)} registros insertados"
-                        self.log_message.emit(msg)
-
-                    fallos_consecutivos = 0
-
-                    # Esperar en intervalos pequeños para responder a stop_requested
-                    for _ in range(inst.update_time * 2):
-                        if self._stop_requested:
-                            break
-                        time.sleep(0.5)
-
-                except Exception as e:
-                    fallos_consecutivos += 1
-                    is_connection_error = isinstance(e, (psycopg2.OperationalError, psycopg2.InterfaceError))
-                    
-                    if is_connection_error:
-                        self.db_connected.emit(False)
-                        self.log_message.emit(f"⚠ Error crítico de conexión: {e}. Reconectando...")
-                        inst._reconnect_db()
-                        self.db_connected.emit(True)
-                        self.log_message.emit("✓ Reconexión exitosa.")
-                        fallos_consecutivos = 0
-                    else:
-                        self.log_message.emit(f"✗ Error en ciclo (Fallo {fallos_consecutivos}/3): {e}")
-                        log.error(f"Error ciclo captura (Fallo {fallos_consecutivos}/3): {e}", exc_info=True)
-                        if fallos_consecutivos >= 3:
-                            self.log_message.emit("Reconectando DB forzadamente tras fallos sucesivos...")
-                            inst._reconnect_db()
-                            self.db_connected.emit(True)
-                            fallos_consecutivos = 0
-                        else:
-                            for _ in range(10):  # Esperar 5s (intento)
-                                if self._stop_requested:
-                                    break
-                                time.sleep(0.5)
+            self.status_changed.emit("running")
 
         except Exception as e:
             self.status_changed.emit("error")
             self.db_connected.emit(False)
             self.log_message.emit(f"✗ Error al inicializar: {e}")
-            log.critical(f"Error fatal en CaptureWorker: {e}", exc_info=True)
+            _hw_logger.error(f"CaptureWorker: error fatal durante inicialización: {e}", exc_info=True)
+            log.critical(f"Error fatal en CaptureWorker.__init__: {e}", exc_info=True)
             return
 
-        finally:
-            self._cleanup()
+        try:
+            # TelemetryLogger.run() bloquea aquí hasta que _stop_event sea seteado.
+            # Internamente lanza SensorProducer (daemon thread) y corre _consumer_loop.
+            self._logger_instance.run()
 
+        except Exception as e:
+            self.status_changed.emit("error")
+            self.db_connected.emit(False)
+            self.log_message.emit(f"✗ Error durante captura: {e}")
+            _hw_logger.error(f"CaptureWorker: error fatal durante run(): {e}", exc_info=True)
+            log.critical(f"Error fatal en CaptureWorker.run(): {e}", exc_info=True)
+            return
+
+        # Llegamos aquí solo si _consumer_loop terminó limpiamente
+        self.db_connected.emit(False)
         self.status_changed.emit("stopped")
         self.log_message.emit("Captura detenida correctamente.")
-
-    def _cleanup(self):
-        """Libera recursos de LHM y DB."""
-        try:
-            if self._logger_instance:
-                inst = self._logger_instance
-                inst.pc.Close()
-                if inst.conn and not inst.conn.closed:
-                    inst.conn.close()
-                self.log_message.emit("Recursos LHM y DB liberados.")
-        except Exception as e:
-            log.warning(f"Error durante cleanup: {e}")
+        _hw_logger.info("CaptureWorker: captura finalizada correctamente.")
 
     # ─── Control externo ──────────────────────────────────────────────────────
 
     def stop(self):
-        """Solicita la detención del hilo de captura."""
-        self._stop_requested = True
+        """
+        Solicita la detención limpia del ciclo de captura.
+        Setea _stop_event de TelemetryLogger para interrumpir el productor
+        y el consumidor. TelemetryLogger.run() se encarga del join y cleanup.
+        """
         self.log_message.emit("Deteniendo captura...")
+        _hw_logger.info("CaptureWorker: detención solicitada por la GUI.")
+
+        if self._logger_instance is not None:
+            # _stop_event interrumpe: _producer_loop (wait), _consumer_loop (get timeout)
+            # y _reconnect_db (wait). capture.py hace join + pc.Close() + conn.close().
+            self._logger_instance._stop_event.set()
+        else:
+            log.warning("CaptureWorker.stop() llamado antes de que la instancia existiera.")
