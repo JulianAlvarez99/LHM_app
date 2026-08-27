@@ -220,6 +220,7 @@ class MainWindow(QMainWindow):
         self._capture_worker.status_changed.connect(self._on_capture_status)
         self._capture_worker.log_message.connect(self._append_log)
         self._capture_worker.db_connected.connect(self._on_db_status)
+        self._capture_worker.records_inserted.connect(self._on_records_inserted)
         self._capture_worker.start()
 
         self._btn_start.setEnabled(False)
@@ -288,14 +289,11 @@ class MainWindow(QMainWindow):
         sb = self._log_view.verticalScrollBar()
         sb.setValue(sb.maximum())
 
-        # Contar registros insertados
-        if msg.startswith("✓") and "registros" in msg:
-            try:
-                n = int(msg.split()[1])
-                self._records_count += n
-                self._card_count.set_value(f"{self._records_count:,}")
-            except (IndexError, ValueError):
-                pass
+    @Slot(int)
+    def _on_records_inserted(self, n: int):
+        """Actualiza el contador de registros enviados de forma confiable."""
+        self._records_count += n
+        self._card_count.set_value(f"{self._records_count:,}", "#4ade80")
 
     @Slot()
     def _on_clear_log(self):

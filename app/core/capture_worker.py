@@ -51,13 +51,24 @@ class CaptureWorker(QThread):
     """
 
     # Señales para la GUI
-    status_changed = Signal(str)   # "running" | "stopped" | "error"
-    log_message    = Signal(str)   # mensaje para el panel de logs
-    db_connected   = Signal(bool)  # True/False según estado de conexión DB
+    status_changed   = Signal(str)   # "running" | "stopped" | "error"
+    log_message      = Signal(str)   # mensaje para el panel de logs
+    db_connected     = Signal(bool)  # True/False según estado de conexión DB
+    records_inserted = Signal(int)   # número de registros del último batch insertado
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._logger_instance = None
+        self._records_count   = 0
+
+    def _on_insert(self, n: int):
+        """Callback llamado por TelemetryLogger tras cada inserción exitosa.
+        Corre en el hilo del QThread, pero Qt encola las señales de forma segura."""
+        self._records_count += n
+        self.records_inserted.emit(n)
+        self.log_message.emit(
+            f"✓ Inserción OK — {n} registros enviados"
+        )
 
     # ─── Ciclo principal del QThread ──────────────────────────────────────────
 
@@ -77,7 +88,7 @@ class CaptureWorker(QThread):
             from capture import TelemetryLogger
 
             # __init__ realiza: conexión DB + init LHM + carga cache + build sensor_plan
-            self._logger_instance = TelemetryLogger()
+            self._logger_instance = TelemetryLogger(on_insert=self._on_insert)
 
             self.db_connected.emit(True)
             self.log_message.emit(

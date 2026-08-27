@@ -1,4 +1,5 @@
 import os
+import sys
 import clr
 import time
 import threading
@@ -13,8 +14,14 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 # --- CONFIGURACIÓN DEL LOGGER ---
-# Crea un log que se guarda en el mismo directorio del script
-log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'telemetry_capture.log')
+# Determinar el directorio base correcto tanto para script como para PyInstaller
+if getattr(sys, 'frozen', False):
+    # Ejecutable PyInstaller: guardar el log alongside el .exe, no en _MEIPASS
+    _base_log_dir = os.path.dirname(sys.executable)
+else:
+    _base_log_dir = os.path.dirname(os.path.abspath(__file__))
+
+log_file = os.path.join(_base_log_dir, 'telemetry_capture.log')
 
 # Formato: [Fecha Hora] - NIVEL - Mensaje
 log_formatter = logging.Formatter('[%(asctime)s] - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -55,7 +62,12 @@ DYNAMIC_REGEX = [
 
 
 class TelemetryLogger:
-    def __init__(self):
+    def __init__(self, on_insert=None):
+        """
+        :param on_insert: callable(n_records: int) opcional. Se llama tras cada
+                          inserción exitosa para notificar a la GUI o a tests.
+        """
+        self._on_insert = on_insert  # callback opcional: fn(n_records)
         self.table_name = os.getenv("CLIENT_TABLE_NAME")
         self.update_time = int(os.getenv("UPDATE_TIME", 10))
         self.conn = self._connect_to_db()
@@ -259,11 +271,11 @@ class TelemetryLogger:
                 logger.info(f"Reconexión exitosa a la base de datos (intento #{attempt}).")
                 break
             except (psycopg2.OperationalError, psycopg2.InterfaceError, OSError, ConnectionError) as e:
-                logger.warning(f"Reconexión fallida (intento #{attempt}): {e}. Reintentando en 60s...")
-                self._stop_event.wait(timeout=60)
+                logger.warning(f"Reconexión fallida (intento #{attempt}): {e}. Reintentando en 30s...")
+                self._stop_event.wait(timeout=30)
             except Exception as e:
-                logger.error(f"Error inesperado durante reconexión (intento #{attempt}): {e}. Reintentando en 60s...", exc_info=True)
-                self._stop_event.wait(timeout=60)
+                logger.error(f"Error inesperado durante reconexión (intento #{attempt}): {e}. Reintentando en 30s...", exc_info=True)
+                self._stop_event.wait(timeout=30)
 
     # ─── Hilo Productor: captura de sensores ───────────────────────────
 
@@ -332,8 +344,16 @@ class TelemetryLogger:
                     extras.execute_values(cur, insert_query, batch)
                     self.conn.commit()
 
-                logger.info(f"Inserción OK: {len(batch)} registros insertados en '{self.table_name}'.")
+                n = len(batch)
+                logger.info(f"Inserción OK: {n} registros insertados en '{self.table_name}'.")
                 fallos_consecutivos = 0
+
+                # Notificar a la GUI (o cualquier consumidor externo) de la inserción
+                if self._on_insert is not None:
+                    try:
+                        self._on_insert(n)
+                    except Exception:
+                        pass
 
             except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
                 logger.critical(f"Error de conexión con la BD durante inserción: {e}")
